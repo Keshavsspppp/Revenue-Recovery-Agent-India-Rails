@@ -1,0 +1,29 @@
+[project]
+name = "revenue-recovery"
+version = "0.1.0"
+description = "Revenue recovery agent for Indian payment rails, with a measured holdout"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# The API and the page. Kept optional so the measurement — which is the deliverable —
+# installs and runs with two dependencies and no web stack.
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+rr = "app.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

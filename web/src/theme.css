@@ -1,0 +1,255 @@
+/* The project's own surface, carried over from app/api/ui.html so the two agree.
+   Colour is reserved for the experiment: teal for the agent acting, grey for the holdout,
+   green and red only where a sign is being claimed. If a pixel is coloured it means
+   something. */
+
+:root {
+  --paper: #EBEDE9;
+  --card: #FFFFFF;
+  --rule: #D3D8D2;
+  --hair: #E4E7E3;
+  --ink: #131A18;
+  --mute: #4E5B57;
+  --faint: #63706B;
+  --treat: #0B6E5F;
+  --hold: #8B958F;
+  --pos: #17703F;
+  --neg: #A81F26;
+  --warn: #7A5B0E;
+  --warnbg: #FAF0D5;
+  --warnrule: #E3CE8E;
+  --shadow: 0 1px 2px rgba(19, 26, 24, .06), 0 10px 28px -20px rgba(19, 26, 24, .32);
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", Menlo, Consolas,
+          "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0C1211;
+    --card: #131B19;
+    --rule: #273331;
+    --hair: #1D2725;
+    --ink: #E7EDEA;
+    --mute: #9CABA6;
+    --faint: #86948F;
+    --treat: #4ECAAF;
+    --hold: #6E7C78;
+    --pos: #4CC38A;
+    --neg: #E8656B;
+    --warn: #E6C079;
+    --warnbg: #241D0C;
+    --warnrule: #5B4A1E;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .45);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 14.5px/1.6 var(--sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+code, .mono, td.n, th.n, .fig, .seq, .lbl { font-family: var(--mono); }
+
+/* ---- chrome ------------------------------------------------------------ */
+.header {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  padding: 0 clamp(16px, 4vw, 40px);
+}
+.bar {
+  max-width: 1180px; margin: 0 auto; display: flex; align-items: center;
+  gap: 14px; min-height: 58px; flex-wrap: wrap; padding: 10px 0;
+}
+.mark {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; margin: 0;
+}
+.mark span { color: var(--faint); font-weight: 400; }
+.spacer { flex: 1 1 auto; }
+.meta { font-family: var(--mono); font-size: 11.5px; color: var(--mute); }
+
+select, input, button {
+  background: var(--card); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 6px 9px; font: 12.5px/1.3 var(--mono);
+}
+select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--treat); outline-offset: 2px;
+}
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--treat); color: var(--treat); }
+button:disabled { opacity: .55; cursor: default; }
+button.primary { background: var(--treat); border-color: var(--treat); color: #fff; }
+button.primary:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
+
+/* ---- the page as an argument, not a grid of equal tiles ---------------- */
+main { max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px) 96px; }
+section { padding: 44px 0; border-bottom: 1px solid var(--rule); }
+section:last-of-type { border-bottom: none; }
+
+/* Every section names the endpoint it was built from. Not decoration: it is the one
+   affordance that lets a sceptical reader go and check. */
+.eyebrow { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.eyebrow h2 {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; margin: 0;
+}
+.source { font-family: var(--mono); font-size: 10.5px; color: var(--mute); }
+.lede { color: var(--mute); font-size: 14px; max-width: 66ch; margin: 0 0 26px; }
+.lede strong { color: var(--ink); font-weight: 600; }
+
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow); }
+.pad { padding: 22px 24px; }
+.scroll { overflow-x: auto; }
+
+/* ---- the hero: the interval, on an axis, with zero drawn --------------- */
+.claim { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+@media (min-width: 940px) { .claim { grid-template-columns: 1fr 360px; } }
+
+.fig {
+  font-size: clamp(36px, 5.5vw, 54px); font-weight: 500; letter-spacing: -.045em;
+  line-height: 1; margin: 0 0 8px;
+}
+.fig-sub { font-family: var(--mono); font-size: 12px; color: var(--mute); }
+
+.axis { margin-top: 34px; }
+.axis-track { position: relative; height: 62px; }
+.axis-line { position: absolute; left: 0; right: 0; top: 36px; height: 1px; background: var(--rule); }
+.axis-band {
+  position: absolute; top: 28px; height: 16px; border-radius: 2px;
+  background: color-mix(in srgb, var(--treat) 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--treat) 55%, transparent);
+}
+.axis-band.crosses {
+  border-color: color-mix(in srgb, var(--neg) 45%, transparent);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--neg) 34%, transparent) var(--zero),
+    color-mix(in srgb, var(--treat) 34%, transparent) var(--zero));
+}
+.axis-zero { position: absolute; top: 16px; bottom: 4px; width: 1px; background: var(--ink); }
+.axis-est { position: absolute; top: 22px; height: 28px; width: 3px; border-radius: 2px; background: var(--treat); }
+.axis-est.neg { background: var(--neg); }
+.tick {
+  position: absolute; top: 48px; font-family: var(--mono); font-size: 10.5px;
+  color: var(--faint); white-space: nowrap; transform: translateX(-50%);
+}
+.tick.zero { color: var(--ink); top: 0; font-weight: 600; letter-spacing: .14em; }
+.cap { font-size: 12.5px; color: var(--mute); line-height: 1.55; max-width: 62ch; }
+.cap b { color: var(--ink); font-weight: 600; }
+
+/* ---- arms -------------------------------------------------------------- */
+.arm { margin-bottom: 18px; }
+.arm-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.arm-head > :first-child { min-width: 0; }
+.arm-name {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--mute);
+}
+.arm-val { font-family: var(--mono); font-size: 13.5px; white-space: nowrap; }
+.arm-bar { height: 10px; background: var(--hair); border-radius: 2px; overflow: hidden; }
+.arm-bar > i { display: block; height: 100%; }
+.arm.t .arm-bar > i { background: var(--treat); }
+.arm.h .arm-bar > i { background: var(--hold); }
+.arm.t .arm-name { color: var(--treat); }
+
+/* ---- tables ------------------------------------------------------------ */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; font-family: var(--mono); font-weight: 500; font-size: 10px;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--faint);
+  padding: 0 10px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
+td { padding: 9px 10px; border-bottom: 1px solid var(--hair); }
+tbody tr:last-child td { border-bottom: none; }
+td.n, th.n { text-align: right; }
+tbody tr:hover td { background: color-mix(in srgb, var(--paper) 60%, transparent); }
+.lbl { font-size: 12px; }
+.pos { color: var(--pos); } .neg { color: var(--neg); } .mut { color: var(--mute); }
+
+/* Diverging bars reuse the hero's zero-axis motif, so the page has one grammar. */
+.div { position: relative; height: 11px; background: var(--hair); border-radius: 2px; min-width: 120px; }
+.div i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.div .mid { position: absolute; top: -2px; bottom: -2px; left: 50%; width: 1px; background: var(--rule); }
+
+/* ---- gate -------------------------------------------------------------- */
+.controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.verdict {
+  margin-top: 18px; border: 1px solid var(--rule); border-left-width: 3px;
+  border-radius: 3px; padding: 16px 18px;
+}
+.verdict.deny { border-left-color: var(--neg); }
+.verdict.allow { border-left-color: var(--pos); }
+.stamp { font-family: var(--mono); font-size: 18px; font-weight: 600; letter-spacing: .12em; }
+.verdict.deny .stamp { color: var(--neg); }
+.verdict.allow .stamp { color: var(--pos); }
+.rule-id { font-family: var(--mono); font-size: 12px; padding: 2px 7px; border: 1px solid var(--rule); border-radius: 3px; }
+.reason { margin-top: 12px; font-size: 14px; }
+.basis { margin-top: 4px; font-size: 12.5px; color: var(--mute); }
+.basis::before {
+  content: "basis "; font-family: var(--mono); font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--faint);
+}
+.passed {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair);
+  font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+  line-height: 1.9; word-spacing: .35em; overflow-wrap: anywhere;
+}
+
+/* ---- the chain, drawn as a chain --------------------------------------- */
+.chain { position: relative; padding-left: 24px; }
+.chain::before {
+  content: ""; position: absolute; left: 4px; top: 14px; bottom: 14px;
+  width: 1px; background: var(--rule);
+}
+.ev {
+  position: relative; display: grid; gap: 0 14px; padding: 9px 0;
+  grid-template-columns: 66px 118px minmax(0, 1fr); align-items: baseline;
+  border-bottom: 1px solid var(--hair);
+}
+.ev:last-child { border-bottom: none; }
+.ev::before {
+  content: ""; position: absolute; left: -24px; top: 14px; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--card); border: 1px solid var(--rule);
+}
+.ev.act::before { background: var(--treat); border-color: var(--treat); }
+.ev.stop::before { background: var(--neg); border-color: var(--neg); }
+.seq { font-size: 11px; color: var(--faint); }
+.stage { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--mute); }
+.ev.act .stage, .ev.stop .stage { color: var(--ink); font-weight: 600; }
+.ev-body { min-width: 0; }
+.ev-act { font-family: var(--mono); font-size: 12.5px; }
+.ev-out { font-family: var(--mono); font-size: 11.5px; }
+.ev-meta {
+  font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+  margin-top: 3px; overflow-wrap: anywhere; line-height: 1.6;
+}
+@media (max-width: 640px) {
+  .ev { grid-template-columns: 56px minmax(0, 1fr); }
+  .ev .stage { grid-column: 2; }
+}
+
+/* ---- state: a shape where the content will be, never the word "loading" - */
+.skel { display: block; border-radius: 3px; background: var(--hair); }
+@media (prefers-reduced-motion: no-preference) {
+  .skel { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+}
+.failed { border-left: 3px solid var(--neg); padding: 14px 16px; background: var(--card); border-radius: 3px; }
+.failed h4 { margin: 0 0 6px; font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--neg); }
+.failed p { margin: 0; font-size: 13px; color: var(--mute); max-width: 60ch; }
+.failed code { color: var(--ink); }
+
+.kv { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--hair); font-size: 13px; }
+.kv:last-child { border-bottom: none; }
+.kv b { font-family: var(--mono); font-weight: 500; }
+.two { display: grid; gap: 34px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 980px) { .two { grid-template-columns: 1fr 1fr; } }
+a { color: var(--treat); text-underline-offset: 2px; }

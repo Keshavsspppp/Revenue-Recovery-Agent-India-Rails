@@ -1,0 +1,98 @@
+# Layer 1 of the cause taxonomy: rail return code -> canonical CauseClass.
+# A versioned lookup table, not model output. docs/04-CAUSE-TAXONOMY.md.
+#
+# WARNING (docs/12-GLOSSARY.md V4): these code numbers and meanings come from published
+# summaries of NPCI/2024-25/NACH/006 (27 Nov 2024). NPCI's own rewrite added 20 codes,
+# revised 33 descriptions and removed 22 — the taxonomy drifts, which is the whole point
+# of this file being config. Reconcile against your PSP's current list before quoting it.
+#
+# `emits` marks the code the simulator produces for that cause on that rail. Exactly one
+# code per (rail, cause) carries it, so the inverse map is well defined.
+
+version: codemap_2026.09.1
+
+codes:
+  # ---- eNACH / e-mandate, AP series ----
+  AP01: {rail: ENACH, cause: INSUFFICIENT_FUNDS, retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Insufficient funds"}
+  AP02: {rail: ENACH, cause: ACCOUNT_TERMINAL,   retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Account closed"}
+  AP03: {rail: ENACH, cause: ACCOUNT_TERMINAL,   retryable: false, customer_action: true,  terminal_for_rail: true,  emits: false, description: "Account frozen or blocked"}
+  AP14: {rail: ENACH, cause: AUTH_ARTEFACT,      retryable: false, customer_action: true,  terminal_for_rail: false, emits: false, description: "Invalid net-banking credentials"}
+  AP16: {rail: ENACH, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: false, description: "Mandate not allowed - minor account"}
+  AP17: {rail: ENACH, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Mandate not allowed - NRE account"}
+  AP18: {rail: ENACH, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: false, description: "Mandate not allowed - credit card account"}
+  AP19: {rail: ENACH, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: false, description: "Mandate not allowed - PF account"}
+  AP20: {rail: ENACH, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: false, description: "Mandate not allowed - PPF account"}
+  AP34: {rail: ENACH, cause: AUTH_ARTEFACT,      retryable: false, customer_action: true,  terminal_for_rail: false, emits: false, description: "Account not registered for net banking"}
+  AP39: {rail: ENACH, cause: AUTH_ARTEFACT,      retryable: true,  customer_action: true,  terminal_for_rail: false, emits: true,  description: "Invalid bank OTP"}
+  AP51: {rail: ENACH, cause: AUTH_ARTEFACT,      retryable: false, customer_action: true,  terminal_for_rail: false, emits: false, description: "Aadhaar not linked to account"}
+  AP53: {rail: ENACH, cause: MANDATE_REVOKED,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Mandate cancelled by customer"}
+  AP58: {rail: ENACH, cause: LIMIT_EXCEEDED,     retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Amount exceeds mandate or AFA limit"}
+  AP65: {rail: ENACH, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: false, emits: false, description: "Account and debit card mismatch"}
+  AP66: {rail: ENACH, cause: TRANSIENT_INFRA,    retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Bank response timeout"}
+  AP67: {rail: ENACH, cause: AUTH_ARTEFACT,      retryable: false, customer_action: true,  terminal_for_rail: false, emits: false, description: "Mobile number not in bank CBS, OTP cannot be triggered"}
+  AP69: {rail: ENACH, cause: AUTH_ARTEFACT,      retryable: false, customer_action: true,  terminal_for_rail: false, emits: false, description: "Customer ID validation failure"}
+  AP70: {rail: ENACH, cause: AUTH_ARTEFACT,      retryable: true,  customer_action: true,  terminal_for_rail: false, emits: false, description: "UIDAI OTP expired"}
+
+  # ---- UPI Autopay (illustrative; PSP lists differ) ----
+  U16: {rail: UPI_AUTOPAY, cause: TRANSIENT_INFRA,    retryable: true,  customer_action: false, terminal_for_rail: false, emits: false, description: "Risk threshold exceeded"}
+  U30: {rail: UPI_AUTOPAY, cause: TRANSIENT_INFRA,    retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Debit failure at remitter"}
+  U54: {rail: UPI_AUTOPAY, cause: MANDATE_REVOKED,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: false, description: "Mandate expired"}
+  U69: {rail: UPI_AUTOPAY, cause: MANDATE_REVOKED,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Mandate not found or revoked"}
+  ZM:  {rail: UPI_AUTOPAY, cause: AUTH_ARTEFACT,      retryable: true,  customer_action: true,  terminal_for_rail: false, emits: true,  description: "Invalid MPIN"}
+  Z9:  {rail: UPI_AUTOPAY, cause: INSUFFICIENT_FUNDS, retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Insufficient funds"}
+  ZA:  {rail: UPI_AUTOPAY, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Mandate not valid for this account"}
+  ZL:  {rail: UPI_AUTOPAY, cause: LIMIT_EXCEEDED,     retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Amount exceeds per-transaction limit"}
+  ZX:  {rail: UPI_AUTOPAY, cause: ACCOUNT_TERMINAL,   retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Account closed or blocked"}
+
+  # ---- Card e-mandate ----
+  CD01: {rail: CARD_EMANDATE, cause: INSUFFICIENT_FUNDS, retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Do not honour - insufficient funds"}
+  CD05: {rail: CARD_EMANDATE, cause: MANDATE_INVALID,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Card expired or replaced"}
+  CD41: {rail: CARD_EMANDATE, cause: ACCOUNT_TERMINAL,   retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Card reported lost or stolen"}
+  CD51: {rail: CARD_EMANDATE, cause: LIMIT_EXCEEDED,     retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Exceeds standing-instruction limit"}
+  CD57: {rail: CARD_EMANDATE, cause: MANDATE_REVOKED,    retryable: false, customer_action: true,  terminal_for_rail: true,  emits: true,  description: "Standing instruction cancelled"}
+  CD91: {rail: CARD_EMANDATE, cause: TRANSIENT_INFRA,    retryable: true,  customer_action: false, terminal_for_rail: false, emits: true,  description: "Issuer unavailable"}
+  CD82: {rail: CARD_EMANDATE, cause: AUTH_ARTEFACT,      retryable: true,  customer_action: true,  terminal_for_rail: false, emits: true,  description: "Authentication artefact - CVV or AFA failure"}
+
+# The scheduler's own defect, not the customer's. Must be 0 on the scoreboard; a non-zero
+# count means a bug in our scheduling, and it is reported as a defect counter.
+self_inflicted:
+  NOTICE_WINDOW_VIOLATION:
+    cause: UNKNOWN
+    description: "Rejected at the rail - no valid 24h pre-debit notice"
+
+# Provider reason strings -> our canonical CauseClass.
+#
+# Razorpay reports its own `error_reason` / `error_code` rather than the raw NPCI code,
+# so live rails need a second mapping layer. It lives here for exactly the reason Layer 1
+# does: these strings drift, and a provider renaming one must never require a code change.
+#
+# Anything unlisted falls to UNKNOWN and increments the unmapped counter, which is the
+# behaviour that makes drift visible instead of silent.
+providers:
+  razorpay:
+    payment_failed:              INSUFFICIENT_FUNDS
+    insufficient_funds:          INSUFFICIENT_FUNDS
+    NA:                          UNKNOWN
+    invalid_request_error:       UNKNOWN
+    BAD_REQUEST_ERROR:           UNKNOWN
+    GATEWAY_ERROR:               TRANSIENT_INFRA
+    gateway_error:               TRANSIENT_INFRA
+    SERVER_ERROR:                TRANSIENT_INFRA
+    server_error:                TRANSIENT_INFRA
+    gateway_technical_error:     TRANSIENT_INFRA
+    payment_timed_out:           TRANSIENT_INFRA
+    amount_exceeds_limit:        LIMIT_EXCEEDED
+    payment_limit_exceeded:      LIMIT_EXCEEDED
+    max_amount_exceeded:         LIMIT_EXCEEDED
+    token_not_found:             MANDATE_INVALID
+    invalid_token:               MANDATE_INVALID
+    token_expired:               MANDATE_REVOKED
+    token_rejected:              MANDATE_REVOKED
+    mandate_revoked:             MANDATE_REVOKED
+    subscription_cancelled:      MANDATE_REVOKED
+    account_blocked:             ACCOUNT_TERMINAL
+    account_closed:              ACCOUNT_TERMINAL
+    invalid_account:             ACCOUNT_TERMINAL
+    authentication_failed:       AUTH_ARTEFACT
+    auth_declined:               AUTH_ARTEFACT
+    invalid_otp:                 AUTH_ARTEFACT

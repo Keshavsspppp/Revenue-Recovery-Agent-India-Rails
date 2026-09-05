@@ -1,0 +1,399 @@
+# Every number the system uses lives here. A constant hardcoded in a module is a bug:
+# the demo varies lambda_harm and the sim parameters from this file alone.
+# See docs/01-DOMAIN-MODEL.md for the declared-assumption caveat on costs and harms.
+
+policy_version: pol_2026.09.2
+# A hash over the declared rule set. `tests/test_gate_denies.py::test_policy_version_bumps`
+# fails if a rule changes without this and `policy_version` being updated together — a
+# trail that cannot name the policy in force at the time is not a defence.
+rules_hash: sha256:2e6be38ffe233313fa99c6f42675493ab6400074fd0c4d084f72a0d4b9c7c9f7
+
+run:
+  horizon_days: 30
+  holdout_frac: 0.20
+  lambda_harm: 0.5
+
+rails:
+  UPI_AUTOPAY:   {afa_free_cap_paise: 1500000, high_cap_paise: 10000000, notice_hours: 24, attempt_fee_paise: 200, mandate_required: true}
+  ENACH:         {afa_free_cap_paise: 1500000, high_cap_paise: 10000000, notice_hours: 24, attempt_fee_paise: 250, mandate_required: true}
+  CARD_EMANDATE: {afa_free_cap_paise: 1500000, high_cap_paise: 10000000, notice_hours: 24, attempt_fee_paise: 300, mandate_required: true}
+  PAYMENT_LINK:  {afa_free_cap_paise: null,    high_cap_paise: null,     notice_hours: 0,  attempt_fee_paise: 400, mandate_required: false}
+
+# high_cap_paise applies only to these categories (RBI e-mandate: 1,00,000 ceiling)
+high_cap_categories: [INSURANCE, MUTUAL_FUND, CREDIT_CARD_BILL]
+
+action_costs:            # paise
+  SEND_PREDEBIT_NOTICE: 15
+  RETRY_DEBIT:          200      # overridden by rails.<rail>.attempt_fee_paise
+  SEND_MESSAGE:         {SMS: 15, WHATSAPP: 35, EMAIL: 2, PUSH: 1}
+  SEND_PAYMENT_LINK:    40
+  REREGISTER_MANDATE:   150
+  SPLIT_DEBIT:          200      # per presentation; a split is n of them
+  REQUEST_PTP:          35
+  VOICE_CONFIRM_PTP:    360
+  OFFER_ACCOMMODATION:  0
+  ESCALATE_HUMAN:       4500
+  WAIT:                 0
+  CLOSE:                0
+
+harm_weights:            # dimensionless, multiplied by lambda_harm in the objective
+  SEND_PREDEBIT_NOTICE: 0.2
+  RETRY_DEBIT:          0.1
+  SEND_MESSAGE:         {SMS: 0.5, WHATSAPP: 0.6, EMAIL: 0.2, PUSH: 0.3}
+  SEND_PAYMENT_LINK:    0.4
+  REREGISTER_MANDATE:   0.7
+  SPLIT_DEBIT:          0.1      # per presentation, same as the retry it is n of
+  REQUEST_PTP:          0.6
+  VOICE_CONFIRM_PTP:    2.0
+  OFFER_ACCOMMODATION:  0.0
+  ESCALATE_HUMAN:       0.5
+  WAIT:                 0.0
+  CLOSE:                0.0
+
+budgets:                          # per account per cycle unless stated
+  attempts_per_cycle: 4
+  contacts_per_week: 3            # rolling 7 days; POL-FREQ-001 reads this
+  voice_per_cycle: 1              # POL-FREQ-003
+  spend_per_cycle_paise: 8000
+
+policy:
+  quiet_hours: {start: "08:00", end: "19:00"}   # POL-QH-001, IST
+  voice_allow_holidays: false                   # POL-QH-002
+  bereavement_days: 30                          # POL-STOP-004
+  max_contacts_per_day: 1                       # POL-FREQ-002
+  ptp_grace_days: 1                             # POL-PTP-001
+  hardship_threshold: 0.6
+  afa_freshness_days: 90          # POL-AFA-002: how recent customer authorisation must be
+
+  # POL-QH-003. National/gazetted dates only: Account carries no region field, so the
+  # regional half of the rule is declared and unused. See docs/DECISIONS.md.
+  festivals_2026: ["2026-09-14", "2026-10-20", "2026-11-08", "2026-11-09", "2026-03-04"]
+  gazetted_holidays_2026: ["2026-01-26", "2026-08-15", "2026-10-02", "2026-11-08"]
+
+  # POL-DLT-001. Senders, headers and templates are pre-registered on the DLT platform;
+  # the agent may only reference an id from this list. Bodies are rendered from the
+  # template, never composed — which is why Action has no message-body field at all.
+  dlt_templates:
+    DLT_RECOVERY_NOTICE_001:  "Pre-debit notice: {merchant} will debit {amount} on {date}. Ref {mandate}. Reply STOP to opt out."
+    DLT_RECOVERY_REMIND_001:  "{merchant}: your payment of {amount} could not be collected. Pay by {date}: {link}"
+    DLT_RECOVERY_FIXIT_001:   "{merchant}: your mandate needs re-authorisation. Complete it here: {link}"
+    DLT_RECOVERY_RECONSENT_001: "{merchant}: your mandate was cancelled. To continue, authorise a new one: {link}"
+    DLT_RECOVERY_PTP_001:     "{merchant}: when can you pay {amount}? Reply with a date."
+    DLT_RECOVERY_LINK_001:    "{merchant}: pay {amount} securely here: {link}"
+
+  # TRAI 1600/140 clarification. Everything this system sends is service/transactional
+  # traffic from a regulated entity to an existing customer, so it uses 1600.
+  cli_series_service: "1600"
+  cli_series_promotional: "140"
+
+circuit_breaker:
+  opt_out_rate: 0.02
+  complaint_rate: 0.005
+
+baselines:
+  merchant_default_retry_days: [3, 7]           # the holdout arm's behaviour
+  fixed_retry_days: [1, 3, 7, 14]
+  fixed_sms_day: 2
+
+# The hardship detector. Every input is observable: repeated insufficient funds, a second
+# merchant failing in the same window, distress language in a reply, a broken promise.
+# None of them is `latent.hardship` — that is what the detector is scored *against*, in
+# the evaluator, and reporting its precision and recall costs nothing and is directly
+# relevant to conduct.
+#
+# Additive and capped rather than fitted: each weight is one legible claim about what a
+# signal is worth, which is what has to be defensible when the answer is "we stopped
+# chasing this person".
+hardship:
+  # Set so that specific *combinations* clear policy.hardship_threshold (0.6), because a
+  # combination is what the evidence actually looks like:
+  #
+  #   distress alone                          0.65  -> flags. Someone telling you in words
+  #                                                    that they cannot pay is the
+  #                                                    strongest signal there is, and
+  #                                                    acting on it is the safe direction.
+  #   repeated shortfall + another merchant   0.65  -> flags. The canonical picture, and
+  #                                                    the only route that needs nothing
+  #                                                    from the customer.
+  #   another merchant alone                  0.30  -> does not. One signal is not a case.
+  #
+  # An earlier pass had the passive pair summing to exactly 0.60 against a strictly-
+  # greater threshold, so the detector could never fire at all. That was an accident of
+  # round numbers rather than a judgement, and it is what this comment exists to prevent.
+  weights:
+    repeated_insufficient_funds: 0.35   # two or more, this cycle: the primary signal
+    other_mandate_failing: 0.30         # a second merchant is failing too
+    distress_language: 0.65             # they told us, in words
+    broken_promise: 0.25                # they meant to and could not
+    broken_promise_then_shortfall: 0.20 # and then failed again: the strongest pair
+  # docs/04: above policy.hardship_threshold the eligible set becomes
+  # {OFFER_ACCOMMODATION, ESCALATE_HUMAN, CLOSE}. Knowing who not to chase.
+
+diagnose:
+  # A cause is "plausible" at or above this posterior mass. The eligible set is the union
+  # of what every plausible cause allows, minus anything explicitly wrong for any of them
+  # — so a 20% chance the mandate is structurally dead is enough to stop retrying it.
+  plausible_threshold: 0.15
+
+  # A *futility* prohibition (this will not work) vetoes only at near-certainty. A *harm*
+  # prohibition (this is the wrong thing to do to a person) still vetoes on any plausible
+  # cause. See app/diagnose/eligible.py.
+  #
+  # High on purpose. The planner already does the probabilistic reasoning correctly: it
+  # solves per cause, prices a futile action at -inf under the causes that forbid it, and
+  # the posterior-weighted Q therefore counts only the mass where the action can work. A
+  # veto in the eligible set is a second, cruder mechanism doing the same job worse — its
+  # only real use is sparing the planner a decision that is all but certainly pointless.
+  futile_veto_threshold: 0.8
+
+  # Layer 1 mapping as a soft prior: this much mass on the mapped class, the rest spread
+  # across the others. The codes are noisy and sponsor banks populate them inconsistently,
+  # so the map is evidence, not truth.
+  code_prior_weight: 0.75
+
+  # Layer 2 is a hand-written Bayesian update: multiply the prior by a likelihood ratio
+  # per observed feature, then normalise. Each number below is one inspectable claim about
+  # the world, which is what the audit trail shows. See docs/DECISIONS.md.
+  evidence:
+    repeated_same_code:            # the same code twice or more this cycle
+      INSUFFICIENT_FUNDS: 1.6      # a timing problem that has not resolved
+      TRANSIENT_INFRA: 0.4         # genuinely transient things stop repeating
+    peak_hour:                     # 19:00-22:00, when the rails are loaded
+      TRANSIENT_INFRA: 1.8
+    amount_above_prior_max:        # larger than anything that ever succeeded here
+      LIMIT_EXCEEDED: 2.5
+      INSUFFICIENT_FUNDS: 1.2
+    tier3:
+      TRANSIENT_INFRA: 1.4
+    other_mandate_failing:         # a second merchant's debit failing in the same window
+      ACCOUNT_TERMINAL: 2.0
+      INSUFFICIENT_FUNDS: 1.5
+    code_changed_between_attempts: # instability: the bank is not telling a consistent story
+      TRANSIENT_INFRA: 1.5
+      UNKNOWN: 2.0
+    recent_mandate_registration:   # registered within 30 days
+      AUTH_ARTEFACT: 2.2
+    long_since_success:            # over 60 days, or never
+      MANDATE_INVALID: 1.6
+      ACCOUNT_TERMINAL: 1.8
+
+    # The account's own records are a second observation, and one the rail did not
+    # write. When a return code claims something our registry contradicts, the code is
+    # the thing more likely to be wrong: mandate lifecycle state comes from registration
+    # and revocation events, not from a per-transaction decline. These are the ratios
+    # that let a 12%-noisy code be overruled by a fact.
+    records_contradict_mandate_death:   # code says the mandate is dead; we hold a live one
+      MANDATE_INVALID: 0.12
+      MANDATE_REVOKED: 0.12
+      ACCOUNT_TERMINAL: 0.15
+      INSUFFICIENT_FUNDS: 2.2
+      TRANSIENT_INFRA: 1.8
+    records_contradict_limit:           # code says over-limit; the amount is within both caps
+      LIMIT_EXCEEDED: 0.15
+      INSUFFICIENT_FUNDS: 2.0
+      TRANSIENT_INFRA: 1.6
+    records_contradict_auth:            # code says an auth artefact; the mandate is ACTIVE
+      AUTH_ARTEFACT: 0.25
+      INSUFFICIENT_FUNDS: 1.8
+      TRANSIENT_INFRA: 1.5
+  recent_registration_days: 30
+  long_since_success_days: 60
+
+planner:
+  # P_success factorises into P_funds * P_infra * P_mandate. Kept factorised on purpose:
+  # each term is separately explainable, which a single fitted model is not.
+  #
+  # P_funds = sigmoid(a + b*delta + c*concentration), where delta measures how recently
+  # the money arrived: +peak_days just after inflow, falling as the month burns down.
+  p_funds: {a: -0.4, b: 0.45, c: 1.1}
+  peak_days: 10                      # delta = clip(peak_days - days_since_inflow, -10, 10)
+  delta_clip_days: 10
+  inflow_fallback_concentration: 0.2
+  inflow_period_days: 30
+
+  # The executor schedules debits at 10:00, which is off-peak by construction, so the
+  # planner uses a flat off-peak prior rather than modelling the hour. Avoiding the
+  # 19:00-22:00 window is cheaper than predicting it.
+  p_infra_offpeak: 0.985
+
+  # Recovery probability for the non-debit actions, as a multiple of the funds signal.
+  # Declared assumptions; the lambda frontier is what makes them honest.
+  lift:
+    SEND_MESSAGE: 0.06
+    SEND_PAYMENT_LINK: 0.14          # a route to pay, and no mandate dependency
+    REQUEST_PTP: 0.10                # P(promise captured) * P(promise kept)
+    OFFER_ACCOMMODATION: 0.05
+    ESCALATE_HUMAN: 0.20
+  # P(the customer completes the authorisation). Calibrated against the simulator's own
+  # realised rate — 42% measured over 60 re-registrations — rather than guessed. Declared
+  # here rather than fitted at runtime: the planner may hold a prior about the world, it
+  # may not look the answer up.
+  reregister_afa_completion: 0.45
+
+  # Solving is cheap, so the value function is cached per (cause, amount band,
+  # concentration bucket) rather than approximated across them.
+  concentration_buckets: 3
+
+  # A split debit presents the cycle amount in this many pieces at most, each under the
+  # per-transaction ceiling. Every part is a separate presentation: its own 24-hour
+  # notice, its own attempt against the budget, its own return code. Three is where the
+  # arithmetic stops being a remedy and starts being harassment — an amount that needs
+  # four presentations to clear the AFA ceiling wants a payment link, not a debit.
+  split_max_parts: 3
+
+  # The planner reasons at ActionType level; the channel is the executor's to fill. It is
+  # named here rather than guessed so the price the planner used and the price the
+  # executor paid are the same number.
+  default_channel: SMS
+
+  # Consult the proposer only where it could plausibly matter: when the two best
+  # substantive actions are within this fraction of each other, so the planner has no
+  # clear winner. docs/07 says the LLM's plausible contribution is "choosing among several
+  # near-equal-EV actions using context the state vector does not encode" — asking it to
+  # confirm a decision the arithmetic already settles is pure cost and latency.
+  #
+  # Measured: without this the agent consults it at every open decision, which on 600
+  # accounts over a 30-day horizon is ~18,600 sequential calls at ~1.5s each. With it,
+  # the call volume falls by well over an order of magnitude and the arm becomes runnable.
+  proposer_margin: 0.05
+
+  # Value of money one day later. Recovering Rs 1,499 on day 4 is worth more than the
+  # same Rs 1,499 on day 27, and the scoreboard already measures days-to-recover.
+  #
+  # It is also what stops deferral being weakly optimal everywhere: WAIT costs nothing,
+  # so without a discount it ties every action it could postpone and the agent waits until
+  # the horizon runs out. 0.995/day is about 16% a year.
+  daily_discount: 0.995
+
+  # Close only when the whole *state* is worth no more than this under the full posterior
+  # — not when today happens to have nothing worth doing. Closing is irreversible and
+  # waiting is free, so the bar for giving up has to include what could still happen,
+  # and on the share of the posterior where the diagnosis is wrong.
+  close_threshold_paise: 0
+
+sim:
+  inflow_day_mixture:                  # (weight, low, high) day-of-month
+    - [0.55, 1, 5]
+    - [0.25, 25, 28]
+    - [0.20, 6, 24]
+  # Monthly income in rupees, lognormal by city tier. Medians ~Rs 45k / 28k / 18k.
+  # Declared assumption, calibrated so that self-cure lands in the 0.30-0.50 band
+  # required by docs/03-SIMULATOR.md. Not a measurement.
+  inflow_paise_lognormal:
+    mean_log_by_tier: {1: 10.71, 2: 10.24, 3: 9.80}
+    sigma_log: 0.50
+
+  # Cycle amount drawn log-uniform in this rupee range, by merchant category. The ratio
+  # of amount to monthly inflow is the dominant lever on how often funds are available,
+  # which is to say: on the self-cure rate.
+  amount_rupees_by_category:
+    SUBSCRIPTION:     [149, 999]
+    LENDING_EMI:      [2000, 45000]
+    INSURANCE:        [800, 15000]
+    MUTUAL_FUND:      [500, 10000]
+    CREDIT_CARD_BILL: [1000, 50000]
+    UTILITY:          [300, 3000]
+
+  # Batch composition
+  category_mix:
+    SUBSCRIPTION: 0.34
+    LENDING_EMI: 0.22
+    UTILITY: 0.16
+    MUTUAL_FUND: 0.12
+    INSURANCE: 0.10
+    CREDIT_CARD_BILL: 0.06
+  city_tier_mix: {1: 0.45, 2: 0.33, 3: 0.22}
+  rail_mix: {ENACH: 0.45, UPI_AUTOPAY: 0.40, CARD_EMANDATE: 0.15}
+  second_mandate_p: 0.35          # share of accounts holding a mandate on a second rail
+  mandate_cap_multiple: [1.2, 3.0]  # registered ceiling as a multiple of the cycle amount
+  notified_recently_days: 3       # window over which a notice still lifts self-pay
+  burn_rate_gamma: {k: 2.0, theta: 0.018}
+  intent_beta: [2.5, 2.0]
+  responsiveness_beta: [2.0, 3.0]
+  hardship_p: 0.07
+  dispute_prone_p: 0.03
+  hardship_inflow_fraction: [0.3, 0.8]
+  hardship_skip_month_p: 0.4
+
+  p_infra: {base_by_tier: {1: 0.012, 2: 0.020, 3: 0.030}, peak_mult: 2.2, weekend_mult: 1.15, cap: 0.12}
+  peak_hours: [19, 22]
+
+  defect_mix:                          # first-failure cause distribution
+    INSUFFICIENT_FUNDS: 0.42
+    TRANSIENT_INFRA:    0.24
+    AUTH_ARTEFACT:      0.11
+    MANDATE_INVALID:    0.08
+    LIMIT_EXCEEDED:     0.06
+    MANDATE_REVOKED:    0.05
+    ACCOUNT_TERMINAL:   0.04
+
+  # base calibrated to 0.006 (docs/03 suggests 0.015). The acceptance band for holdout
+  # self-cure, 0.30-0.50, is a specified constraint; 0.015 was an undeclared assumption
+  # and put the batch at 0.57. See docs/DECISIONS.md.
+  selfpay: {base: 0.006, intent_mult: 2.0, notified_mult: 1.5, no_funds_factor: 0.15, annoyance_damp: 0.6}
+  annoy:       {SMS: 0.06, WHATSAPP: 0.08, EMAIL: 0.02, PUSH: 0.03, VOICE: 0.22}
+  intent_lift: {SMS: 0.10, WHATSAPP: 0.16, EMAIL: 0.05, PUSH: 0.06, VOICE: 0.30}
+  hazards:
+    opt_out:   {base: 0.004, annoy_sq: 0.09}
+    complaint: {base: 0.001, annoy_sq: 0.03}
+    dispute:   {prone: 0.02, annoy: 0.01}
+    # An annoyed customer killing the mandate is a worse outcome than opting out of
+    # messages: it ends future revenue, not just this cycle's outreach. Reported as
+    # mandate_cancellations_per_1k on the same screen as the money.
+    mandate_cancel: {base: 0.0015, annoy_sq: 0.035}
+  voice:
+    answer_base: 0.35
+    annoyance_damp: 0.5
+    ptp_captured: 0.55
+    dispute: {prone: 0.10, base: 0.03}
+    hardship: {if_hardship: 0.40, else: 0.02}
+  distress_phrase_p: 0.12               # among hardship accounts replying to REQUEST_PTP
+  # Distress language from an account that is not in hardship. Non-zero on purpose: a
+  # detector with no false positives is a detector nobody has measured. Kept well below
+  # the hardship rate so the signal carries, and its precision is reported at M11.
+  distress_phrase_p_other: 0.005
+
+  # A second merchant's debit failing in the same window. The PSP sees this across
+  # merchants, so it is observable to us — and it is one of the few hardship signals that
+  # does not require the customer to tell us anything.
+  # A re-registered mandate lands PENDING_AFA: the customer has to go and authorise it.
+  # Some of them do. Without this the repaired mandate stays dead forever, REREGISTER can
+  # never pay off, and the planner is pricing a 55% completion chance the world never
+  # delivers — which is exactly what the account timeline showed.
+  #
+  # `completion_p` is scaled by the customer's responsiveness, so it is the same
+  # willingness-to-act that drives every other customer response, not a separate dial.
+  afa: {completion_p: 0.55, window_days: 7}
+
+  other_mandate_failing_p: {hardship: 0.45, other: 0.06}
+
+  # Promise to pay. A customer who replies picks a date they can actually make, which is
+  # why a captured promise carries real information the agent could not otherwise get:
+  # it is the customer telling you their inflow phase.
+  ptp:
+    reply_lift: 0.8                     # P(reply) = reply_lift * responsiveness
+    capture_given_reply: 0.65           # of repliers, how many name a date
+    promise_lag_days: [0, 3]            # days after their inflow that they promise for
+    keep_given_funds: 0.75              # they said they would, and the money is there
+    partial_given_short: 0.35           # money is short: pay part of it rather than none
+    partial_fraction: [0.3, 0.8]
+    base_confidence: 0.6
+    broken_decay: 0.5                   # multiplicative: repeated breaks compound
+    kept_recovery: 0.4
+
+  # Sponsor banks populate the return codes inconsistently, and NPCI's own rewrite added
+  # 20 codes, revised 33 and removed 22. With this probability the rail reports a code
+  # belonging to a *different* cause than the one that actually occurred.
+  #
+  # Without this the simulator emits a perfect code every time, Layer 2 can only ever
+  # agree with Layer 1, and the entire cause-taxonomy story is decorative. Declared
+  # assumption, not a measurement. See docs/DECISIONS.md.
+  code_noise: 0.12
+
+  # A live recurring mandate has been collecting for months before the cycle that failed.
+  # Those past *successful* debits are the planner's only signal about when the customer's
+  # money arrives: the merchant attempts on a fixed due date, but the attempt that
+  # succeeds lands after the salary does, so the successful dates cluster around inflow.
+  # Without this history every account is cold-start and the planner has nothing to plan on.
+  prior_success_count: [3, 9]        # how many past cycles collected cleanly
+  prior_success_lag_days: [0, 4]     # days after inflow that the successful attempt landed

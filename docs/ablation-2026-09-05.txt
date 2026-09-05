@@ -1,0 +1,24 @@
+PROPOSER ABLATION   policy=agent   rules=pol_2026.09.2   λ=0.5
+
+  arm               recovery      incremental                             95% CI        cost  contacts
+  rules               37.9%    -₹1,41,318.21 [-₹6,47,080.97, ₹2,84,502.78]     ₹468.15       421
+  planner-argmax      37.6%    -₹1,46,427.65 [-₹6,68,012.46, ₹2,72,245.09]     ₹465.90       406
+  groq                37.6%    -₹1,46,427.65 [-₹6,68,012.46, ₹2,72,245.09]     ₹466.05       407
+
+  READ THIS AS
+    the MDP over a heuristic                -₹5,109.44
+    the LLM over the MDP                         ₹0.00
+    the two intervals overlap, so this difference is not measurable
+    on this batch. The honest move is to ship the planner and say so.
+  rules agreed with the planner's own pick 0.9% of 232 decisions it was actually asked about
+
+  groq calls=188 cache_hits=0 invalid=0 failures=3 latency p50=756ms p95=1300ms
+       failures by kind: URLError=1 http_400=1 http_429_daily_limit=1
+
+  !! groq HIT A PROVIDER DAILY LIMIT PART-WAY THROUGH.
+     rate limit reached for model `openai/gpt-oss-20b` in organization `org_01jrn9dah5ee5s7nysd9p40r9m` service tier `on_demand` on tokens per day (tpd): limit 200000, used 199324, requested 1055. please t
+     Every call after that fell through to the planner, so this row
+     is part model and part planner and is NOT a measurement of the
+     proposer. Re-run it with budget or do not quote it.
+  groq agreed with the planner's own pick 98.3% of 527 decisions it was actually asked about
+rc=0

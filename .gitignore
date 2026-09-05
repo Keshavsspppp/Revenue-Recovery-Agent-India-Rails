@@ -1,0 +1,40 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.claude
+docs/
+# Credentials. Never commit these — the Razorpay adapter refuses non-test keys, but a
+# leaked test secret still lets anyone create objects in your account.
+.env
+.env.local
+
+# Batches. Every one is regenerable from its seed, and they run to hundreds of megabytes.
+# `data/live.db` is the exception — it holds references to real Razorpay objects — but it
+# is still yours, not the repo's.
+data/
+
+docs/*.md
+# Frontend
+web/node_modules/
+web/dist/
+web/.vite/
+# Built dashboard: `cd web && npm run build` regenerates it.
+app/api/web/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+CLAUDE.md
+
+# TypeScript incremental build state
+web/*.tsbuildinfo
+web/src/*.tsbuildinfo
